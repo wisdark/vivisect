@@ -496,6 +496,7 @@ class WorkspaceEmulator:
 
                         if self.emustop:
                             return
+
                     iscall = self.checkCall(starteip, endeip, op)
                     if self.emustop:
                         return
@@ -663,6 +664,10 @@ class WorkspaceEmulator:
                 rettype, retname, callconv, callname, callargs = api
                 if val not in argv:
                     return self.reprVivTaint(taint)
+
+            else:
+                return self.reprVivTaint(taint)
+
 
         stackoff = self.getStackOffset(val)
         if stackoff is not None:

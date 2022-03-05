@@ -400,6 +400,22 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
         self._fireEvent(VWE_ADDRELOC, (fname, offset, rtype, data))
         return self.getRelocation(va)
 
+    def delRelocation(self, va, full=False):
+        """
+        Delete a tracked relocation.
+        """
+        mmap = self.getMemoryMap(va)
+        if not mmap:
+            logger.warning('delRelocation: No matching map found for %s', va)
+            return None
+
+        mmva, mmsz, mmperm, fname = mmap    # FIXME: getFileByVa does not obey file defs
+        reloc = self.getRelocation(va)
+        if not reloc:
+            return None
+        self._fireEvent(VWE_DELRELOC, (fname, va, reloc, full))
+        return reloc
+
     def getRelocations(self):
         """
         Get the current list of relocation entries.
@@ -614,6 +630,7 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
         self.server.vprint('%s connecting...' % uname)
         wsevents = self.server.exportWorkspace()
         self.importWorkspace(wsevents)
+        self._snapInAnalysisModules()
         self.server.vprint('%s connection complete!' % uname)
 
         thr = threading.Thread(target=self._clientThread)
@@ -944,7 +961,8 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
 
                 loctup = self.getLocation(va)
                 if loctup is not None:
-                    offset += loctup[L_SIZE]
+                    nextva = loctup[L_VA] + loctup[L_SIZE]
+                    offset = nextva - mva
                     if offset % align:
                         offset += align
                         offset &= -align
@@ -1672,22 +1690,29 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
             ret = []
         return ret
 
-    def makeFunctionThunk(self, fva, thname, addVa=True, filelocal=False):
+    def makeFunctionThunk(self, fva, thname, addVa=True, filelocal=False, basename=None):
         """
         Inform the workspace that a given function is considered a "thunk" to another.
         This allows the workspace to process argument inheritance and several other things.
+
+        If basename is provided, that name is used to create the Vivisect name for the thunk.
+        If basename is not provided, thname is chopped and used for the Vivisect name.
+        This difference allows, for example, the Elf loader to make PLT functions named "plt_<foo>" 
+        but still use the official thunk name "*.<foo>".  This thunk name is used to look up
+        the import api.  These "*.<foo>" thunk names are also used in the addNoReturnApi().
 
         Usage: vw.makeFunctionThunk(0xvavavava, "kernel32.CreateProcessA")
         """
         self.checkNoRetApi(thname, fva)
         self.setFunctionMeta(fva, "Thunk", thname)
-        n = self.getName(fva)
 
-        base = thname.split(".")[-1]
+        if basename is None:
+            basename = thname.split(".")[-1]
+
         if addVa:
-            name = "%s_%.8x" % (base,fva)
+            name = "%s_%.8x" % (basename, fva)
         else:
-            name = base
+            name = basename
         newname = self.makeName(fva, name, filelocal=filelocal, makeuniq=True)
 
         api = self.getImpApi(thname)
@@ -2152,7 +2177,7 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
         pva, psize, tinfo = self._getStrTinfo(va, size, subs)
 
         if self.getName(va) is None:
-            m = self.readMemory(va, size-1).replace(b'\n', b'')
+            m = self.readMemory(va, size).replace(b'\x00', b'').replace(b'\n', b'')
             self.makeName(va, "str_%s_%.8x" % (m[:16].decode('utf-8'), va))
         return self.addLocation(pva, psize, LOC_STRING, tinfo=tinfo)
 
@@ -2596,13 +2621,16 @@ class VivWorkspace(e_mem.MemoryObject, viv_base.VivWorkspaceCore):
         self._fireEvent(VWE_SETNAME, (va,name))
         return name
 
-    def saveWorkspace(self, fullsave=True):
+    def saveWorkspace(self, fullsave=True, filename=None):
 
-        if self.server is not None:
+        if self.server is not None and not filename:
             return
 
+        # prefer our arg filename if provided
+        if not filename:
+            filename = self.getMeta("StorageName")
+
         modname = self.getMeta("StorageModule")
-        filename = self.getMeta("StorageName")
         if modname is None:
             raise Exception("StorageModule not specified!")
         if filename is None:
@@ -3144,6 +3172,6 @@ def getVivPath(*pathents):
 ##############################################################################
 # The following are touched during the release process by bump2version.
 # You should have no reason to modify these directly
-version = (1, 0, 5)
+version = (1, 0, 7)
 verstring = '.'.join([str(x) for x in version])
 commit = ''

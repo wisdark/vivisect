@@ -1,5 +1,7 @@
 import io
+import os
 import logging
+import tempfile
 import unittest
 
 import envi
@@ -12,6 +14,7 @@ import vivisect.const as v_const
 import vivisect.tools.graphutil as v_t_graphutil
 
 import vivisect.tests.helpers as helpers
+import vivisect.tests.utils as v_t_utils
 
 
 logger = logging.getLogger(__name__)
@@ -25,12 +28,14 @@ def isint(x):
     return type(x) is int
 
 
-class VivisectTest(unittest.TestCase):
+class VivisectTest(v_t_utils.VivTest):
     @classmethod
     def setUpClass(cls):
         cls.firefox_vw = helpers.getTestWorkspace('windows', 'amd64', 'firefox.exe')
         cls.chgrp_vw = helpers.getTestWorkspace('linux', 'i386', 'chgrp.llvm')
         cls.vdir_vw = helpers.getTestWorkspace('linux', 'i386', 'vdir.llvm')
+        cls.sh_vw = helpers.getTestWorkspace('linux', 'arm', 'sh')
+        cls.chown_vw = helpers.getTestWorkspace('linux', 'amd64', 'chown')
 
         for vw in cls.vdir_vw, cls.chgrp_vw, cls.firefox_vw:
             oldcanv = vw.canvas
@@ -201,7 +206,7 @@ class VivisectTest(unittest.TestCase):
         self.chgrp_vw.do_funcmeta('chgrp.plt_free')
         output = self.chgrp_vw.canvas.strval
         self.assertIn("'MnemDist': {'jmp': 1},", output)
-        self.assertIn("'Thunk': 'plt_free',", output)
+        self.assertIn("'Thunk': '*.free',", output)
         self.assertIn("'api': ('void', None, 'cdecl', '*.free', [('void *', 'ptr')])}", output)
         self.chgrp_vw.canvas.clearCanvas()
 
@@ -289,11 +294,17 @@ class VivisectTest(unittest.TestCase):
         self.chgrp_vw.canvas.clearCanvas()
 
     def test_cli_memdump(self):
-        self.chgrp_vw.do_memdump('chgrp.plt_strncmp /tmp/memdumptest 16')
-        dumpedmem = open('/tmp/memdumptest', 'rb').read()
-        vwmem = self.chgrp_vw.readMemory(self.chgrp_vw.parseExpression('chgrp.plt_strncmp'), 16) 
-        self.assertEqual(dumpedmem, vwmem)
-        self.chgrp_vw.canvas.clearCanvas()
+        tmpf = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            self.chgrp_vw.do_memdump(f'chgrp.plt_strncmp {tmpf.name} 16')
+            with open(tmpf.name, 'rb') as fd:
+                dumpedmem = fd.read()
+            vwmem = self.chgrp_vw.readMemory(self.chgrp_vw.parseExpression('chgrp.plt_strncmp'), 16)
+            self.assertEqual(dumpedmem, vwmem)
+            self.chgrp_vw.canvas.clearCanvas()
+        finally:
+            tmpf.close()
+            os.unlink(tmpf.name)
 
     def test_cli_names(self):
         self.chgrp_vw.do_names('plt_.*64')
@@ -320,11 +331,17 @@ class VivisectTest(unittest.TestCase):
         self.chgrp_vw.canvas.clearCanvas()
 
     def test_cli_script(self):
-        open('/tmp/vivscript', 'wb').write(b"vw.vprint('doin the do')\nvw.vprint(repr(argv))")
-        self.chgrp_vw.do_script('/tmp/vivscript arg1 arg2 arg3') 
-        output = self.chgrp_vw.canvas.strval
-        self.assertIn("doin the do\n['/tmp/vivscript', 'arg1', 'arg2', 'arg3']", output)
-        self.chgrp_vw.canvas.clearCanvas()
+        tmpf = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            tmpf.write(b"vw.vprint('doin the do')\nvw.vprint(repr(argv))")
+            tmpf.flush()
+            self.chgrp_vw.do_script(f'{tmpf.name} arg1 arg2 arg3')
+            output = self.chgrp_vw.canvas.strval
+            self.assertIn(f"doin the do\n['{tmpf.name}', 'arg1', 'arg2', 'arg3']", output)
+            self.chgrp_vw.canvas.clearCanvas()
+        finally:
+            tmpf.close()
+            os.unlink(tmpf.name)
 
     def test_cli_symboliks(self):
         self.chgrp_vw.do_symboliks('')
@@ -674,26 +691,7 @@ class VivisectTest(unittest.TestCase):
                                  (0x80622ec, 0x0, 'vdir', 'default_quoting_options'),
                                  (0x806231c, 0x0, 'vdir', 'slot0'),
                                  ],
-            'EmucodeFunctions': [(134582272,), (134583808,), (134552688,), (134556176,), (134548256,), (134575648,),
-                                 (134549936,), (134556208,), (134548240,), (134582048,), (134577216,), (134572896,),
-                                 (134582304,), (134576528,), (134573136,), (134556288,), (134548224,), (134572128,),
-                                 (134568720,), (134572928,), (134575264,), (134577264,), (134573440,), (134575520,),
-                                 (134553152,), (134575232,), (134575296,), (134575760,), (134548128,), (134581872,),
-                                 (134552608,), (134573232,), (134575488,), (134575744,), (134550208,), (134575904,),
-                                 (134576000,), (134548432,), (134572096,), (134559872,), (134548176,), (134575728,),
-                                 (134572864,), (134584016,), (134552576,), (134568688,), (134575456,), (134549968,),
-                                 (134575712,), (134548144,), (134581952,), (134574848,), (134548352,), (134575184,),
-                                 (134582032,), (134549952,), (134572320,), (134553392,), (134582576,), (134573600,),
-                                 (134576720,), (134553312,), (134548272,), (134573856,), (134575424,), (134573792,),
-                                 (134553568,), (134548304,), (134573408,), (134582160,), (134582416,), (134575392,),
-                                 (134582128,), (134583712,), (134573568,), (134582144,), (134575680,), (134519728,),
-                                 (134553488,), (134556128,), (134559504,), (134573472,), (134554096,), (134572464,),
-                                 (134575616,), (134575872,), (134575552,), (134582112,), (134561824,), (134573264,),
-                                 (134561232,), (134574816,), (134547936,), (134582096,), (134552448,), (134552560,),
-                                 (134575584,), (134553216,), (134573760,), (134582064,),
-                                 (134519472,), (134518848,), (134518128,), (134518112,),
-                                 (134518304,), (134518512,), (134518576,), (134518000,),
-                                 (134518672,), ]
+            'EmucodeFunctions': []
 
         }
 
@@ -706,7 +704,7 @@ class VivisectTest(unittest.TestCase):
                 self.fail(mesg)
 
         self.assertEqual(len(vw.getVaSetRows('CodeFragments')), 213)
-        self.assertEqual(len(vw.getVaSetRows('EntryPoints')), 230)
+        self.assertEqual(len(vw.getVaSetRows('EntryPoints')), 536)
 
     def test_basic_apis(self):
         '''
@@ -869,7 +867,7 @@ class VivisectTest(unittest.TestCase):
         rloc = vw.addRelocation(0xdeadbeef, v_const.RTYPE_BASEOFF)
         self.assertIsNone(rloc)
 
-        rloc = vw.addRelocation(0x08054184, v_const.RTYPE_BASEPTR)
+        rloc = vw.addRelocation(0x08054184, v_const.RTYPE_BASEPTR, data=0)
         self.assertIsNotNone(rloc)
 
     def test_naughty(self):
@@ -1486,3 +1484,64 @@ class VivisectTest(unittest.TestCase):
                     0x140049b40, 0x140049aa0, 0x1400497a0, 0x140049720, 0x140049820, 0x140049a20]
 
         self.assertEqual(thunks, set(impthunk))
+
+    def test_NoRet(self):
+
+        # test analysis stops after a few known NoRets
+        # arm/sh
+        self.assertIsNone(self.sh_vw.getLocation(0x0000ddaa))
+        self.assertIsNone(self.sh_vw.getLocation(0x000288ce))
+       
+        # linux/i386/vdir.llvm
+        self.assertIsNone(self.vdir_vw.getLocation(0x080589ba))
+        self.assertIsNone(self.vdir_vw.getLocation(0x0805875f))
+        self.assertIsNone(self.vdir_vw.getLocation(0x08057b12))
+        self.assertIsNone(self.vdir_vw.getLocation(0x0804adc9))
+
+        # linux/i386/chgrp.llvm
+        self.assertIsNone(self.chgrp_vw.getLocation(0x0804cb15))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x0804c814))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x0804c66e))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x0804b7b9))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x0804d0ae))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x080494d6))
+        self.assertIsNone(self.chgrp_vw.getLocation(0x080499e5))
+
+        # windows/amd64/firefox
+        self.assertIsNone(self.firefox_vw.getLocation(0x14000dd2c))
+        self.assertIsNone(self.firefox_vw.getLocation(0x1400175bb))
+        self.assertIsNone(self.firefox_vw.getLocation(0x140048e8f))
+        self.assertIsNone(self.firefox_vw.getLocation(0x14001bd26))
+        self.assertIsNone(self.firefox_vw.getLocation(0x1400163a7))
+
+    def test_del_reloc(self):
+        with self.snap(self.chown_vw) as vw:
+            base = vw.getFileMeta('chown', 'imagebase')
+
+            va = 0x20f950
+            rva = 0x20f950 + base
+
+            reloc = [rdat for rdat in vw.getRelocations() if rdat[1] == va]
+            self.len(reloc, 1)
+            rtyp = vw.getRelocation(rva)
+            self.assertEqual(2, rtyp)
+
+            old = len(vw.getRelocations())
+            self.assertEqual(2, vw.delRelocation(rva, full=True))
+
+            self.none(vw.getLocation(rva))
+            self.len(vw.getXrefsFrom(rva), 0)
+            self.len(vw.getXrefsTo(0x20028a0), 1)
+            self.eq(2, self.chown_vw.getRelocation(rva))
+            self.eq(1, old - len(vw.getRelocations()))
+
+            self.none(vw.delRelocation(0xabad1dea))
+
+            self.nn(self.chown_vw.getLocation(rva))
+            self.len(self.chown_vw.getXrefsFrom(rva), 1)
+            self.len(self.chown_vw.getXrefsTo(0x20028a0), 2)
+
+    def test_string_naming(self):
+        # string naming should not chop off the last character
+        self.assertEqual(self.chown_vw.getName(0x0200c050), 'str_ownership of %s _0200c050')
+
