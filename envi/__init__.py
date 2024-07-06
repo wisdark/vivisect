@@ -9,8 +9,8 @@ import types
 import struct
 import logging
 import platform
+import importlib
 import contextlib
-import importlib.util as imputil
 
 from envi.exc import *
 
@@ -44,12 +44,18 @@ ARCH_MIPS64      = 22 << 16
 
 ARCH_MASK        = 0xffff0000   # Masked into IF_FOO and BR_FOO values
 
+
 arch_defs = {
     ARCH_I386:      {
         'name':     'i386',
         'aliases':  ('i486', 'i586', 'i686', 'x86'),
         'modpath':  ('envi', 'archs', 'i386', ),
         'clsname':  'i386Module',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_AMD64:     {
@@ -57,46 +63,81 @@ arch_defs = {
         'aliases':  ('x86_64',),
         'modpath':  ('envi', 'archs', 'amd64'),
         'clsname':  'Amd64Module',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_ARMV7:     {
         'name':     'arm',
-        'aliases':  ('armv6l', 'armv7l', 'a32'),
+        'aliases':  ('armv6l', 'armv7l', 'a32', 'leg', 'leg32'),
         'modpath':  ('envi', 'archs', 'arm'),
         'clsname':  'ArmModule',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_THUMB16:   {
         'name':     'thumb16',
         'modpath':  ('envi', 'archs', 'thumb16'),
         'clsname':  'Thumb16Module',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_THUMB:     {
         'name':     'thumb',
-        'aliases':  ('t32', 'thumb2'),
+        'aliases':  ('t32', 'thumb2', 'toe', 'toe2', 'toe32'),
         'modpath':  ('envi', 'archs', 'thumb16'),
         'clsname':  'ThumbModule',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_A64:       {
         'name':     'a64',
-        'aliases':  ('aarch64',),
+        'aliases':  ('aarch64', 'leg64', 'legv8'),
         'modpath':  ('envi', 'archs', 'a64'),
         'clsname':  'A64Module',
         'disabled': True,
+        'version':  (0,2,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_MSP430:    {
         'name':     'msp430',
         'modpath':  ('envi', 'archs', 'msp430'),
         'clsname':  'Msp430Module',
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_H8:        {
         'name':     'h8',
         'modpath':  ('envi', 'archs', 'h8'),
         'clsname':  'H8Module',
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_MCS51:     {
@@ -105,6 +146,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'mcs51'),
         'clsname':  'Mcs51Module',
         'disabled': True,
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_RISCV32:   {
@@ -113,6 +159,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'rv32'),
         'clsname':  'Rv32Module',
         'disabled': True,
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_RISCV64:   {
@@ -120,6 +171,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'rv64'),
         'clsname':  'Rv64Module',
         'disabled': True,
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_PPC_E32:   {
@@ -128,6 +184,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'Ppc32EmbeddedModule',
         'disabled': True,
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_PPC_E64:   {
@@ -136,6 +197,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'Ppc64EmbeddedModule',
         'disabled': True,
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_PPC_S32:   {
@@ -144,6 +210,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'Ppc32ServerModule',
         'disabled': True,
+        'version':  (0,9,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_PPC_S64:   {
@@ -152,6 +223,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'Ppc64ServerModule',
         'disabled': True,
+        'version':  (0,9,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_PPCVLE:    {
@@ -160,6 +236,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'PpcVleModule',
         'disabled': True,
+        'version':  (1,0,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_PPC_D:     {
@@ -167,6 +248,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'ppc'),
         'clsname':  'PpcDesktopModule',
         'disabled': True,
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      True,
+        'has_symboliks':True,
+        'has_unittests':True,
         },
     
     ARCH_RXV2:      {
@@ -175,6 +261,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'rxv2'),
         'clsname':  'RxModule',
         'disabled': True,
+        'version':  (0,5,0),
+        'has_disasm':   True,
+        'has_emu':      False,
+        'has_symboliks':False,
+        'has_unittests':True,
         },
     
     ARCH_SPARC:     {
@@ -182,6 +273,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'sparc'),
         'clsname':  'SparcModule',
         'disabled': True,
+        'version':  (0,1,0),
+        'has_disasm':   True,
+        'has_emu':      False,
+        'has_symboliks':False,
+        'has_unittests':False,
         },
     
     ARCH_SPARC64:   {
@@ -189,6 +285,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'sparc64'),
         'clsname':  'Sparc64Module',
         'disabled': True,
+        'version':  (0,1,0),
+        'has_disasm':   True,
+        'has_emu':      False,
+        'has_symboliks':False,
+        'has_unittests':False,
         },
     
     ARCH_MIPS32:    {
@@ -197,6 +298,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'mips32'),
         'clsname':  'Mips32Module',
         'disabled': True,
+        'version':  (0,1,0),
+        'has_disasm':   True,
+        'has_emu':      False,
+        'has_symboliks':False,
+        'has_unittests':False,
         },
     
     ARCH_MIPS64:    {
@@ -204,6 +310,11 @@ arch_defs = {
         'modpath':  ('envi', 'archs', 'mips64'),
         'clsname':  'Mips64Module',
         'disabled': True,
+        'version':  (0,1,0),
+        'has_disasm':   True,
+        'has_emu':      False,
+        'has_symboliks':False,
+        'has_unittests':False,
         },
 }
 
@@ -657,6 +768,10 @@ class Opcode:
         """
         Return a list of tuples.  Each tuple contains the target VA of the
         branch, and a possible set of flags showing what type of branch it is.
+
+        Without an emulator, dynamic branches may not be resolvable, and will
+        return a VA of None.  This is intended, and used by codeflow analysis
+        to mark dynamic branches for later analysis (eg. Switchcase analysis).
 
         See the BR_FOO types for all the supported envi branch flags....
         Example: for bva,bflags in op.getBranches():
@@ -1513,14 +1628,14 @@ def getArchModule(name=None):
 
     # retrieve path and class info.  envi/archs/<archname>/__init__.py with amodname()
     modpathtup = arch_defs[archnum]['modpath']
+    impname = ".".join(modpathtup)
     amodname = arch_defs[archnum].get('clsname')
 
     # load the module (given the path and module name)
     try:
-        module = loadModuleFromPathTup(rname, modpathtup)
-
-    except ModuleLoadFailure as e:
-        raise ArchNotImplemented(e.component, e.message)
+        module = importlib.import_module(impname)
+    except ImportError as e:
+        raise ArchNotImplemented(impname, e.message)
 
     # instantiate the ArchitectureModule
     cls = getattr(module, amodname)
@@ -1528,56 +1643,6 @@ def getArchModule(name=None):
     
     return archmod
 
-def loadModuleFromPathTup(modname, modpathtup):
-    '''
-    Load a Python module given a module path tuple
-
-    Searches through the PYTHONPATH for a matching module
-    '''
-    modpath = os.path.join(*modpathtup)
-    for pathbase in sys.path:
-        tmppath = os.path.join(pathbase, modpath)
-        if os.path.exists(tmppath):
-            modpath = tmppath
-            break
-    
-    return loadModuleFromAbsolutePath(modname, modpath)
-
-def loadModuleFromAbsolutePathTup(modname, modpathtup):
-    '''
-    Load a Python module given an absolute module path tuple
-    '''
-    modpath = os.sep + os.path.join(*modpathtup)
-    return loadModuleFromAbsolutePath(modname, modpath)
-
-def loadModuleFromAbsolutePath(modname, modpath):
-    '''
-    Load a Python module given an absolute module path string
-    '''
-    # if we hand in the path to the directory, load the __init__.py
-    if os.path.isdir(modpath):
-        modpath = os.path.join(modpath, '__init__.py')
-
-    if not os.path.exists(modpath):
-        raise ModuleLoadFailure(modname, "Path does not exist: %r" % modpath)
-
-    # get the module spec
-    spec = imputil.spec_from_file_location(modname, modpath)
-    if not spec:
-        raise ModuleLoadFailure(modname, "Failed to load module")
-
-    # create an unintialized module from the spec
-    module = imputil.module_from_spec(spec)
-    if not module:
-        raise ModuleLoadFailure(modname, "Failed to create uninitialized module from the spec")
-
-    # insert the module into sys.modules:
-    sys.modules[modname] = module
-
-    # initialize the module (actually "importing" it)
-    spec.loader.exec_module(module)
-
-    return module
 
 def getArchModules(default=ARCH_DEFAULT):
     '''
